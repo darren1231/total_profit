@@ -80,19 +80,24 @@ class profit_compare(object):
         
         ## buy stock
         if if_b:
-            if_add_before = self.add_stock_code(stock_code,volume)            
+            if_add_before = self.add_stock_code(stock_code,volume)
 
             ochw_table["diff_temp"]=(ochw_table["Close"]-price)*volume
             ochw_table["cost_temp"]=price*volume
+            ochw_table["volume_temp"]=volume
+
             self.debug_for_table(ochw_table)
             ochw_table.loc[ochw_table.index<date,"diff_temp"]=0
             ochw_table.loc[ochw_table.index<date,"cost_temp"]=0
+            ochw_table.loc[ochw_table.index<date,"volume_temp"]=0
             self.debug_for_table(ochw_table)
             ochw_table["diff"]+= ochw_table["diff_temp"]
             ochw_table["cost"]+= ochw_table["cost_temp"]
+            ochw_table["volume"]+= ochw_table["volume_temp"]
             self.debug_for_table(ochw_table)
             ochw_table=ochw_table.drop(columns=["diff_temp"])
             ochw_table=ochw_table.drop(columns=["cost_temp"])
+            ochw_table=ochw_table.drop(columns=["volume_temp"])
             self.debug_for_table(ochw_table)
 
         
@@ -103,22 +108,27 @@ class profit_compare(object):
             
             ochw_table["diff_temp"]=(ochw_table["Close"]-price)*volume*-1
             ochw_table["cost_temp"]=price*volume
+            ochw_table["volume_temp"]=volume
 
             
             self.debug_for_table (ochw_table)
             ochw_table.loc[ochw_table.index<date,"diff_temp"]=0
             ochw_table.loc[ochw_table.index<date,"cost_temp"]=0
+            ochw_table.loc[ochw_table.index<date,"volume_temp"]=0
             self.debug_for_table (ochw_table)
 
             
 
             ochw_table["diff"]+= ochw_table["diff_temp"]
             ochw_table["cost"]-= ochw_table["cost_temp"]
+            ochw_table["volume"]-= ochw_table["volume_temp"]
             ochw_table=ochw_table.drop(columns=["diff_temp"])
             ochw_table=ochw_table.drop(columns=["cost_temp"])
+            ochw_table=ochw_table.drop(columns=["volume_temp"])
 
             if  if_empty:
                 ochw_table.loc[ochw_table.index>=date,"cost"]=0
+                ochw_table.loc[ochw_table.index>=date,"volume"]=0
             
 
             self.debug_for_table (ochw_table)

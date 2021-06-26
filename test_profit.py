@@ -21,7 +21,8 @@ def test_calculate_profit():
     pc.stock_table_dict[stock_code]=load_data()
     pc.stock_table_dict[stock_code]["diff"]=0
     pc.stock_table_dict[stock_code]["cost"]=0
-    pc.debug_for_table = True
+    pc.stock_table_dict[stock_code]["volume"]=0
+    pc.if_debug = True
     date = datetime.datetime(2015, 11, 30)
     pc.calculate_profit(stock_code,140,50,True,date)
     date = datetime.datetime(2015, 12, 1)
