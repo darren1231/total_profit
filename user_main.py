@@ -56,8 +56,10 @@ class User(object):
             print(stock_list)
 
         return process
-    
-    
+
+    def get_market_history(self,start,end):
+        return web.DataReader('^TWII', 'yahoo', start, end)
+
     def get_stock_history(self,start,end,stock_str):
         """
         Args:
@@ -80,6 +82,7 @@ class User(object):
         stock_df["cost"]=0
         stock_df["volume"]=0
 
+        
         return stock_df
 
     def save_data(self,data,file_name):
@@ -156,14 +159,45 @@ class User(object):
             summary["total_cost"]+=stock_table_dict[key]["cost"]
             summary["sell_all"]+=stock_table_dict[key]["volume"]*stock_table_dict[key]["Close"]
         return summary
-    
+    def test_market(self,summary):
+
+        checklist = self.checklist
+        checklist['date'] = pd.to_datetime(checklist['date'], format='%Y/%m/%d')
+        def calculate_apy(date,sell_all):
+            less_then_date = checklist.loc[checklist['date']<date]
+            equal_date = checklist.loc[checklist['date']==date]
+            
+            num_row = less_then_date.shape[0]
+            total_cash_flow = less_then_date[["date","cash_flow"]]
+
+            #if date exist in checklist
+            if equal_date.shape[0]!=0:                
+                total_cash_flow.loc[-1]=[date,summary.loc[date,"sell_all"].copy()+equal_date["cash_flow"].sum().copy()]
+            #date not in checklist
+            else:
+                total_cash_flow.loc[-1]=[date,summary.loc[date,"sell_all"].copy()]
+            
+            # print (total_cash_flow)
+            if num_row==0:
+                return 0
+            else:
+                return xirr(total_cash_flow)
+
+
+        # summary["age"] = summary.apply(apply_age,args=(-3,))
+        summary["date"]=summary.index
+        summary['apy'] = summary.apply(lambda x: calculate_apy(x.date, x.sell_all), axis=1)
+        print(summary)
+        return summary
+
     def compare_market(self,summary):
         
         checklist=self.checklist
         checklist['date'] = pd.to_datetime(checklist['date'], format='%Y/%m/%d')
         # checklist = checklist.loc[checklist.date>=start]
         print (checklist)
-        market_table = web.DataReader('^TWII', 'yahoo', start, datetime.datetime.today())
+        end = datetime.datetime(2021, 7, 21)
+        market_table = web.DataReader('^TWII', 'yahoo', start, end)
 
         for data_row in tqdm(summary.itertuples(index=True)):
             date = data_row.Index
@@ -263,8 +297,11 @@ if __name__=="__main__":
     # for stock_id in tqdm(stock_id_list):
     #     stock_df=user.get_stock_history(start,end,stock_id)
     #     pc.stock_table_dict[stock_id]=stock_df
-    # user.save_data(pc.stock_table_dict,"20210720_stock_data.pickle")
-    pc.stock_table_dict = user.load_data('20210720_stock_data.pickle')
+    
+    # stock_df=user.get_market_history(start,end)
+    # pc.stock_table_dict["^TWII"]=stock_df
+    # user.save_data(pc.stock_table_dict,"20210722_stock_data.pickle")
+    pc.stock_table_dict = user.load_data('20210722_stock_data.pickle')
     ###############################################
     # Step2: calculate profit
     # pc.if_debug = True
@@ -279,7 +316,9 @@ if __name__=="__main__":
     #################################################
     #Step3: Compare market
     summary,market_table=user.compare_market(summary)
+    # summary,market_table=user.test_market(summary)
+
     user.plot_summary(summary,market_table)
-    # print (summary)
+    print (summary)
 
     
