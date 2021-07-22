@@ -11,7 +11,11 @@ import time
 import pickle
 import matplotlib.pyplot as plt
 from pyxirr import xirr
-import yfinance as yf
+import swifter
+import numpy as np
+import numba
+
+# import yfinance as yf
 # yf.pdr_override()
 
 class User(object):
@@ -142,7 +146,8 @@ class User(object):
 
     def summary(self,stock_table_dict):
         for index, (key, value) in enumerate(stock_table_dict.items()):
-
+            if key=="^TWII":
+                continue
 
             if index == 0:
                 stock_table_dict[key]["total_profit"]=0
@@ -159,11 +164,15 @@ class User(object):
             summary["total_cost"]+=stock_table_dict[key]["cost"]
             summary["sell_all"]+=stock_table_dict[key]["volume"]*stock_table_dict[key]["Close"]
         return summary
-    def test_market(self,summary):
+    def compare_market_apply(self,summary,market_table):
 
         checklist = self.checklist
         checklist['date'] = pd.to_datetime(checklist['date'], format='%Y/%m/%d')
-        def calculate_apy(date,sell_all):
+        summary["market_table"]=market_table.Close
+        print (summary)
+
+        # @numba.jit(nopython=True)
+        def calculate_apy(date,sell_all,market_data,checklist,market_table):
             less_then_date = checklist.loc[checklist['date']<date]
             equal_date = checklist.loc[checklist['date']==date]
             
@@ -172,32 +181,41 @@ class User(object):
 
             #if date exist in checklist
             if equal_date.shape[0]!=0:                
-                total_cash_flow.loc[-1]=[date,summary.loc[date,"sell_all"].copy()+equal_date["cash_flow"].sum().copy()]
+                total_cash_flow.loc[-1]=[date,sell_all+equal_date["cash_flow"].sum().copy()]
             #date not in checklist
             else:
-                total_cash_flow.loc[-1]=[date,summary.loc[date,"sell_all"].copy()]
+                total_cash_flow.loc[-1]=[date,sell_all]
             
             # print (total_cash_flow)
             if num_row==0:
-                return 0
+                return 0,0
             else:
-                return xirr(total_cash_flow)
+                ## market profit                
+                dates = [market_table.index[0]]
+                values = [market_table.iloc[0]["Close"]*-1]
+                market_cash_flow = pd.DataFrame(zip(dates, values))
+                # print (market_cash_flow)
 
+                market_cash_flow.loc[-1]=[date,market_data]        
 
+                return xirr(total_cash_flow)*100,xirr(market_cash_flow)*100
+
+        
         # summary["age"] = summary.apply(apply_age,args=(-3,))
         summary["date"]=summary.index
-        summary['apy'] = summary.apply(lambda x: calculate_apy(x.date, x.sell_all), axis=1)
-        print(summary)
+        summary['apy'],summary['market_apy'] = zip(*summary\
+            .apply(lambda x: calculate_apy(x.date, x.sell_all,x.market_table,checklist,market_table), axis=1))
+        
+        # summary['apy'],summary['market_apy'] = np.vectorize(calculate_apy)(summary['date'], summary['sell_all'],summary["market_table"])
         return summary
 
-    def compare_market(self,summary):
+    def compare_market(self,summary,market_table):
         
         checklist=self.checklist
         checklist['date'] = pd.to_datetime(checklist['date'], format='%Y/%m/%d')
         # checklist = checklist.loc[checklist.date>=start]
         print (checklist)
-        end = datetime.datetime(2021, 7, 21)
-        market_table = web.DataReader('^TWII', 'yahoo', start, end)
+        
 
         for data_row in tqdm(summary.itertuples(index=True)):
             date = data_row.Index
@@ -235,7 +253,7 @@ class User(object):
                 #     summary.loc[date,"apy"]=0
                 #     print (total_cash_flow)
                 # else:
-                summary.loc[date,"apy"]=xirr(total_cash_flow)
+                summary.loc[date,"apy"]=xirr(total_cash_flow)*100
                 
                 ## market profit
                 market_equal_date = market_table.loc[market_table.index==date]
@@ -249,14 +267,14 @@ class User(object):
                 summary.loc[date,"market_apy"]=xirr(market_cash_flow)*100
                 
                 # print (summary)
-        return summary,market_table
+        return summary
     
     def plot_summary(self,summary,market_table):
         start = datetime.datetime(2020, 1, 1)
         summary = summary.loc[summary.index>=start]
 
 
-        summary["apy"]=summary["apy"]*100
+        summary["apy"]=summary["apy"]
         summary['apy'] = summary['apy'].fillna(0)
         print (summary)
         # summary.to_csv('after_process.csv',index=True, encoding='utf-8')
@@ -312,13 +330,15 @@ if __name__=="__main__":
     start = datetime.datetime(2019, 10, 23)
     summary = summary.loc[summary.index>=start]
     print (summary)
-    # market_table = web.DataReader('^TWII', 'yahoo', start, datetime.datetime.today())
+    
+    start_time = time.time()
     #################################################
     #Step3: Compare market
-    summary,market_table=user.compare_market(summary)
-    # summary,market_table=user.test_market(summary)
-
-    user.plot_summary(summary,market_table)
-    print (summary)
+    # summary=user.compare_market(summary,pc.stock_table_dict["^TWII"])
+    
+    summary=user.compare_market_apply(summary,pc.stock_table_dict["^TWII"])
+    print ("time:",time.time()-start_time)
+    # user.plot_summary(summary,pc.stock_table_dict["^TWII"])
+    # print (summary)
 
     
