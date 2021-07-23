@@ -19,24 +19,29 @@ import numba
 # yf.pdr_override()
 
 class User(object):
-    def __init__(self):
+    def __init__(self,file_path):
         self.Buy_symbol = "現股買進"
         self.Sell_symbol = "現股賣出"
-        self.checklist=self.read_action_csv(True)
+        self.checklist=self.read_action_csv(file_path,False)
 
-    def read_action_csv(self,debug=False):
+    def read_action_csv(self,file_path,debug=False):
 
-        file_path="example.csv"
+        # file_path="example.csv"
         checklist = pd.read_csv(file_path,engine='python')
+        checklist.volume=checklist.volume.str.replace(",","")
+        checklist.volume=checklist.volume.astype('int32')
         if debug:
             print(checklist)
+            print(checklist.dtypes)
 
         return checklist
     
     def add_cash_flow(self):
 
         checklist = self.checklist
-        checklist["cash_flow"]=checklist["volume"]*checklist["price"]*\
+        # print (checklist)
+        # checklist["cash_flow"]=checklist["volume"]*checklist["price"]
+        checklist["cash_flow"]=checklist["volume"]*1.0*checklist["price"]*\
         checklist["class"].map({self.Buy_symbol:-1, self.Sell_symbol:1})
         self.checklist = checklist
 
@@ -85,7 +90,7 @@ class User(object):
         stock_df["diff"]=0
         stock_df["cost"]=0
         stock_df["volume"]=0
-
+        stock_df["realized_profit"]=0
         
         return stock_df
 
@@ -101,6 +106,7 @@ class User(object):
         date_year,date_month,date_day = date_str.split("/")
         return int(date_year),int(date_month),int(date_day)
     
+
     def calculate_profit(self):
         pattern = re.compile(".*\((.*)\)")
 
@@ -141,29 +147,45 @@ class User(object):
             # else:
             #     pc.if_debug=False
 
-            print (date,class_bool,stock_split_str,volume,price)
+            # print (date,class_bool,stock_split_str,volume,price)
             pc.calculate_profit(stock_split_str,price,volume,class_bool,date)
 
     def summary(self,stock_table_dict):
+        debug = False
         for index, (key, value) in enumerate(stock_table_dict.items()):
+            if key=="00632R":
+                debug = True
+                
+            
             if key=="^TWII":
                 continue
+            if value.isnull().sum().sum():
+                raise ValueError("the data frame is null",key)
 
             if index == 0:
                 stock_table_dict[key]["total_profit"]=0
                 stock_table_dict[key]["total_cost"]=0
                 stock_table_dict[key]["sell_all"]=0
+                stock_table_dict[key]["total_realized_profit"]=0
 
                 print (stock_table_dict[key])
-                summary = stock_table_dict[key][["total_profit","total_cost","sell_all"]].copy()
+                summary = stock_table_dict[key]\
+                    [["total_profit","total_cost","sell_all","total_realized_profit"]].copy()
                 
                 print (summary)
             
             print (pc.stock_table_dict[key])
+
             summary["total_profit"]+=stock_table_dict[key]["diff"]
+            summary["total_realized_profit"]+=stock_table_dict[key]["realized_profit"]
             summary["total_cost"]+=stock_table_dict[key]["cost"]
             summary["sell_all"]+=stock_table_dict[key]["volume"]*stock_table_dict[key]["Close"]
-        return summary
+
+            
+            # if summary.isnull().sum().sum():
+            #     raise ValueError("the data frame is null",key)
+
+        return summary.interpolate()
     def compare_market_apply(self,summary,market_table):
 
         checklist = self.checklist
@@ -197,8 +219,19 @@ class User(object):
                 # print (market_cash_flow)
 
                 market_cash_flow.loc[-1]=[date,market_data]        
+                # print (market_cash_flow)
 
-                return xirr(total_cash_flow)*100,xirr(market_cash_flow)*100
+                # print (total_cash_flow)
+                try:
+                    apy = xirr(total_cash_flow)*100
+                    market_apy = xirr(market_cash_flow)*100                   
+                
+                except:
+                    print ("total_cash_flow",total_cash_flow)
+                    print ("market_cash_flow",market_cash_flow)
+                
+                return apy,market_apy
+
 
         
         # summary["age"] = summary.apply(apply_age,args=(-3,))
@@ -206,6 +239,7 @@ class User(object):
         summary['apy'],summary['market_apy'] = zip(*summary\
             .apply(lambda x: calculate_apy(x.date, x.sell_all,x.market_table,checklist,market_table), axis=1))
         
+        summary[summary.apy > 40]=40
         # summary['apy'],summary['market_apy'] = np.vectorize(calculate_apy)(summary['date'], summary['sell_all'],summary["market_table"])
         return summary
 
@@ -269,32 +303,33 @@ class User(object):
                 # print (summary)
         return summary
     
-    def plot_summary(self,summary,market_table):
-        start = datetime.datetime(2020, 1, 1)
-        summary = summary.loc[summary.index>=start]
-
-
-        summary["apy"]=summary["apy"]
-        summary['apy'] = summary['apy'].fillna(0)
+    def plot_summary(self,summary,market_table,start_date=None):
+        
+        if start_date:
+            summary = summary.loc[summary.index>=start_date]
+        
         print (summary)
         # summary.to_csv('after_process.csv',index=True, encoding='utf-8')
-        summary["percent"]=summary["total_profit"].astype(float)/summary["total_cost"].astype(float)*100
+        summary["percent"]=(summary["total_profit"]-summary["total_realized_profit"])\
+            .astype(float)/summary["total_cost"].astype(float)*100
+        # summary["percent"]=summary["total_profit"].astype(float)/summary["total_cost"].astype(float)*100
 
-        summary["percent"].plot(kind="line")
-        summary["apy"].plot(kind="line")
-
-        # summary["total_profit"].plot(kind="line")
-        # summary["total_cost"].plot(kind="line")
-
-
-
-        print (market_table)
+        
+        # print (market_table)
         base = market_table["Close"][0]
         summary["market_profit"]= (market_table["Close"]-base)/market_table["Close"]*100
+        summary["percent"].plot(kind="line")
         summary["market_profit"].plot(kind="line")
+
+        ##################################################################
+        # summary["apy"]=summary["apy"]
+        # summary['apy'] = summary['apy'].fillna(0)
+        summary["apy"].plot(kind="line")
         summary["market_apy"].plot(kind="line")
 
-        plt.legend(["total_profit","apy","market_profit","market_apy"])
+        # plt.legend(["unrealized_profit","market_unrealized_profit"])
+        # plt.legend(["apy","market_apy"])
+        plt.legend(["unrealized_profit","market_unrealized_profit","apy","market_apy"])
         plt.ylabel("percent")
         # summary["total_profit"].plot()
         # plt.legend(["percent", "total_profit","total_cost"])
@@ -302,9 +337,9 @@ class User(object):
 
 if __name__=="__main__":
     # set a new class
-    user = User()    
+    user = User("my_long_action.csv")    
     pc = profit_compare()
-    stock_id_list = user.get_stock_list(debug=True)
+    stock_id_list = user.get_stock_list(debug=False)
 
 
     ## Step1:Get history of stock data
@@ -316,29 +351,39 @@ if __name__=="__main__":
     #     stock_df=user.get_stock_history(start,end,stock_id)
     #     pc.stock_table_dict[stock_id]=stock_df
     
+    # # get market history
     # stock_df=user.get_market_history(start,end)
     # pc.stock_table_dict["^TWII"]=stock_df
-    # user.save_data(pc.stock_table_dict,"20210722_stock_data.pickle")
-    pc.stock_table_dict = user.load_data('20210722_stock_data.pickle')
+
+    # user.save_data(pc.stock_table_dict,"20210723_stock_data_long.pickle")
+    # pc.stock_table_dict = user.load_data('20210722_stock_data.pickle')
+    pc.stock_table_dict = user.load_data('20210723_stock_data_long.pickle')
     ###############################################
     # Step2: calculate profit
     # pc.if_debug = True
     user.add_cash_flow()
     user.calculate_profit()
-
+    pc.show_stock_table_dict()
     summary=user.summary(pc.stock_table_dict)
-    start = datetime.datetime(2019, 10, 23)
+    start = datetime.datetime(2020, 1, 1)
+    end = datetime.datetime(2021, 7, 20)
     summary = summary.loc[summary.index>=start]
+    summary = summary.loc[summary.index<end]
+    market_table = pc.stock_table_dict["^TWII"]
+    market_table = market_table.loc[market_table.index>=start]
+    market_table = market_table.loc[market_table.index<end]
     print (summary)
     
     start_time = time.time()
-    #################################################
-    #Step3: Compare market
+    ################################################
+    # Step3: Compare market
     # summary=user.compare_market(summary,pc.stock_table_dict["^TWII"])
     
-    summary=user.compare_market_apply(summary,pc.stock_table_dict["^TWII"])
+    summary=user.compare_market_apply(summary,market_table)
     print ("time:",time.time()-start_time)
-    # user.plot_summary(summary,pc.stock_table_dict["^TWII"])
-    # print (summary)
+
+    # start_date = datetime.datetime(2020, 7, 1)
+    user.plot_summary(summary,market_table)
+    print (summary)
 
     

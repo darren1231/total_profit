@@ -52,6 +52,9 @@ class profit_compare(object):
 
         for key,value in self.stock_code_dict.items():
             print (key,value)
+    def show_stock_table_dict(self):
+        for key,value in self.stock_table_dict.items():
+            print (key,value)
 
     def save_data(self,data):
         with open('test.pickle', 'wb') as handle:
@@ -127,6 +130,11 @@ class profit_compare(object):
             ochw_table=ochw_table.drop(columns=["volume_temp"])
 
             if  if_empty:
+                ochw_table.loc[ochw_table.index>=date,"realized_profit_temp"]=ochw_table.loc[ochw_table.index>=date,"cost"]*-1
+                ochw_table.loc[ochw_table.index<date,"realized_profit_temp"]=0
+                ochw_table["realized_profit"]+= ochw_table["realized_profit_temp"]
+                ochw_table=ochw_table.drop(columns=["realized_profit_temp"])
+
                 ochw_table.loc[ochw_table.index>=date,"cost"]=0
                 ochw_table.loc[ochw_table.index>=date,"volume"]=0
             
@@ -134,4 +142,23 @@ class profit_compare(object):
             self.debug_for_table (ochw_table)
         ## update
         self.stock_table_dict[stock_code]=ochw_table
-        
+    
+    def xirr(self,cashflows):
+        years = [(ta[0] - cashflows[0][0]).days / 365. for ta in cashflows]
+        residual = 1.0
+        step = 0.05
+        guess = 0.05
+        epsilon = 0.0001
+        limit = 10000
+        while abs(residual) > epsilon and limit > 0:
+            limit -= 1
+            residual = 0.0
+            for i, trans in enumerate(cashflows):
+                residual += trans[1] / pow(guess, years[i])
+            if abs(residual) > epsilon:
+                if residual > 0:
+                    guess += step
+                else:
+                    guess -= step
+                    step /= 2.0
+        return guess - 1
