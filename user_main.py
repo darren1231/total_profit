@@ -69,6 +69,15 @@ class User(object):
     def get_market_history(self,start,end):
         return web.DataReader('^TWII', 'yahoo', start, end)
 
+    def reindex_stock_table_dict(self,stock_table_dict):
+        first_key = list(stock_table_dict.keys())[0]
+        first_date_index = stock_table_dict[first_key].index
+
+        for key,value in stock_table_dict.items():
+            stock_table_dict[key] = value.reindex(first_date_index).interpolate()
+
+        return stock_table_dict
+
     def get_stock_history(self,start,end,stock_str):
         """
         Args:
@@ -168,13 +177,13 @@ class User(object):
                 stock_table_dict[key]["sell_all"]=0
                 stock_table_dict[key]["total_realized_profit"]=0
 
-                print (stock_table_dict[key])
+                # print (stock_table_dict[key])
                 summary = stock_table_dict[key]\
                     [["total_profit","total_cost","sell_all","total_realized_profit"]].copy()
                 
-                print (summary)
+                # print (summary)
             
-            print (pc.stock_table_dict[key])
+            # print (pc.stock_table_dict[key])
 
             summary["total_profit"]+=stock_table_dict[key]["diff"]
             summary["total_realized_profit"]+=stock_table_dict[key]["realized_profit"]
@@ -185,7 +194,7 @@ class User(object):
             # if summary.isnull().sum().sum():
             #     raise ValueError("the data frame is null",key)
 
-        return summary.interpolate()
+        return summary
     def compare_market_apply(self,summary,market_table):
 
         checklist = self.checklist
@@ -310,9 +319,9 @@ class User(object):
         
         print (summary)
         # summary.to_csv('after_process.csv',index=True, encoding='utf-8')
-        summary["percent"]=(summary["total_profit"]-summary["total_realized_profit"])\
-            .astype(float)/summary["total_cost"].astype(float)*100
-        # summary["percent"]=summary["total_profit"].astype(float)/summary["total_cost"].astype(float)*100
+        # summary["percent"]=(summary["total_profit"]-summary["total_realized_profit"])\
+        #     .astype(float)/summary["total_cost"].astype(float)*100
+        summary["percent"]=summary["total_profit"].astype(float)/summary["total_cost"].astype(float)*100
 
         
         # print (market_table)
@@ -358,20 +367,21 @@ if __name__=="__main__":
     # user.save_data(pc.stock_table_dict,"20210723_stock_data_long.pickle")
     # pc.stock_table_dict = user.load_data('20210722_stock_data.pickle')
     pc.stock_table_dict = user.load_data('20210723_stock_data_long.pickle')
+    pc.stock_table_dict = user.reindex_stock_table_dict(pc.stock_table_dict)
     ###############################################
     # Step2: calculate profit
     # pc.if_debug = True
     user.add_cash_flow()
     user.calculate_profit()
-    pc.show_stock_table_dict()
+    # pc.show_stock_table_dict()
     summary=user.summary(pc.stock_table_dict)
-    start = datetime.datetime(2020, 1, 1)
-    end = datetime.datetime(2021, 7, 20)
-    summary = summary.loc[summary.index>=start]
-    summary = summary.loc[summary.index<end]
+    # start = datetime.datetime(2020, 1, 1)
+    # end = datetime.datetime(2021, 7, 20)
+    # summary = summary.loc[summary.index>=start]
+    # summary = summary.loc[summary.index<end]
     market_table = pc.stock_table_dict["^TWII"]
-    market_table = market_table.loc[market_table.index>=start]
-    market_table = market_table.loc[market_table.index<end]
+    # market_table = market_table.loc[market_table.index>=start]
+    # market_table = market_table.loc[market_table.index<end]
     print (summary)
     
     start_time = time.time()
@@ -383,7 +393,8 @@ if __name__=="__main__":
     print ("time:",time.time()-start_time)
 
     # start_date = datetime.datetime(2020, 7, 1)
-    user.plot_summary(summary,market_table)
+    start_date = None
+    user.plot_summary(summary,market_table,start_date)
     print (summary)
 
     
