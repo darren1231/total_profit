@@ -11,9 +11,9 @@ import time
 import pickle
 import matplotlib.pyplot as plt
 from pyxirr import xirr
-import swifter
+# import swifter
 import numpy as np
-import numba
+# import numba
 
 # import yfinance as yf
 # yf.pdr_override()
@@ -28,7 +28,7 @@ class User(object):
 
         # file_path="example.csv"
         checklist = pd.read_csv(file_path,engine='python')
-        checklist.volume=checklist.volume.str.replace(",","")
+        # checklist.volume=checklist.volume.str.replace(",","")
         checklist.volume=checklist.volume.astype('int32')
         if debug:
             print(checklist)
@@ -248,8 +248,10 @@ class User(object):
         summary['apy'],summary['market_apy'] = zip(*summary\
             .apply(lambda x: calculate_apy(x.date, x.sell_all,x.market_table,checklist,market_table), axis=1))
         
-        summary[summary.apy > 40]=40
-        # summary['apy'],summary['market_apy'] = np.vectorize(calculate_apy)(summary['date'], summary['sell_all'],summary["market_table"])
+        
+        # summary['apy'],summary['market_apy'] = np.vectorize(calculate_apy)(summary['date'], \
+        #     summary['sell_all'],summary["market_table"],checklist,market_table)
+        summary[summary.apy > 50]=50
         return summary
 
     def compare_market(self,summary,market_table):
@@ -346,7 +348,9 @@ class User(object):
 
 if __name__=="__main__":
     # set a new class
-    user = User("my_long_action.csv")    
+    # user = User("my_long_action.csv")
+    # user = User("example.csv")
+    user = User("20220211.csv")
     pc = profit_compare()
     stock_id_list = user.get_stock_list(debug=False)
 
@@ -364,9 +368,9 @@ if __name__=="__main__":
     # stock_df=user.get_market_history(start,end)
     # pc.stock_table_dict["^TWII"]=stock_df
 
-    # user.save_data(pc.stock_table_dict,"20210723_stock_data_long.pickle")
-    # pc.stock_table_dict = user.load_data('20210722_stock_data.pickle')
-    pc.stock_table_dict = user.load_data('20210723_stock_data_long.pickle')
+    # user.save_data(pc.stock_table_dict,"20220211_stock_data_long.pickle")
+    pc.stock_table_dict = user.load_data('20220211_stock_data_long.pickle')
+    # pc.stock_table_dict = user.load_data('20210723_stock_data_long.pickle')
     pc.stock_table_dict = user.reindex_stock_table_dict(pc.stock_table_dict)
     ###############################################
     # Step2: calculate profit
@@ -375,13 +379,13 @@ if __name__=="__main__":
     user.calculate_profit()
     # pc.show_stock_table_dict()
     summary=user.summary(pc.stock_table_dict)
-    # start = datetime.datetime(2020, 1, 1)
-    # end = datetime.datetime(2021, 7, 20)
-    # summary = summary.loc[summary.index>=start]
-    # summary = summary.loc[summary.index<end]
+    start = datetime.datetime(2020, 1, 1)
+    end = datetime.datetime(2022, 2, 11)
+    summary = summary.loc[summary.index>=start]
+    summary = summary.loc[summary.index<end]
     market_table = pc.stock_table_dict["^TWII"]
-    # market_table = market_table.loc[market_table.index>=start]
-    # market_table = market_table.loc[market_table.index<end]
+    market_table = market_table.loc[market_table.index>=start]
+    market_table = market_table.loc[market_table.index<end]
     print (summary)
     
     start_time = time.time()
@@ -392,9 +396,9 @@ if __name__=="__main__":
     summary=user.compare_market_apply(summary,market_table)
     print ("time:",time.time()-start_time)
 
-    # start_date = datetime.datetime(2020, 7, 1)
-    start_date = None
+    start_date = datetime.datetime(2020, 7, 1)
+    # start_date = None
     user.plot_summary(summary,market_table,start_date)
-    print (summary)
+    # print (summary)
 
     
